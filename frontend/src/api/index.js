@@ -57,6 +57,13 @@ export const movieAPI = {
   rate: (id, rating) => api.post(`/movies/${id}/rate`, { rating }),
 };
 
+// Review APIs
+export const reviewAPI = {
+  getByMovie: (movieId) => api.get(`/reviews/${movieId}`),
+  addOrUpdate: (movieId, rating, reviewText) => api.post('/reviews', { movieId, rating, reviewText }),
+  delete: (reviewId) => api.delete(`/reviews/${reviewId}`)
+};
+
 // User APIs
 export const userAPI = {
   // Favorites

@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useMovieDetail } from "../hooks/useMovies";
 import { useAuth } from "../hooks/useAuth";
 import LoadingSpinner from "../components/LoadingSpinner";
 import TrailerModal from "../components/TrailerModal";
 import RecommendationCarousel from "../components/RecommendationCarousel";
+import StarRating from "../components/StarRating";
+import ReviewCard from "../components/ReviewCard";
+import { toast } from "react-hot-toast";
 import {
   Heart,
   Plus,
@@ -18,11 +21,12 @@ import {
   ArrowLeft,
   Sparkles,
 } from "lucide-react";
+import { reviewAPI } from "../api";
 import { formatRating, getGenreColor, getMoodColor } from "../utils/helpers";
 
 const MovieDetail = () => {
   const { id } = useParams();
-  const { movie, similarMovies, loading, error } = useMovieDetail(id);
+  const { movie, similarMovies, loading, error, refetch } = useMovieDetail(id);
   const {
     user,
     isFavorite,
@@ -33,6 +37,13 @@ const MovieDetail = () => {
     removeFromWatchlist,
   } = useAuth();
   const [showTrailer, setShowTrailer] = useState(false);
+  const [reviews, setReviews] = useState([]);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewText, setReviewText] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(true);
+  const [reviewError, setReviewError] = useState(null);
+  const [existingReviewId, setExistingReviewId] = useState(null);
 
   const favorite = isFavorite(id);
   const inWatchlist = isInWatchlist(id);
@@ -52,6 +63,64 @@ const MovieDetail = () => {
       await addToWatchlist(id);
     }
   };
+
+  const fetchReviews = useCallback(async () => {
+    if (!id) return;
+    setReviewLoading(true);
+    setReviewError(null);
+
+    try {
+      const response = await reviewAPI.getByMovie(id);
+      const reviewData = response.data.data || [];
+      setReviews(reviewData);
+
+      const userReview = reviewData.find(
+        (item) => item.user?._id === user?._id,
+      );
+      if (userReview) {
+        setReviewRating(userReview.rating);
+        setReviewText(userReview.reviewText || "");
+        setExistingReviewId(userReview._id);
+      } else {
+        setReviewRating(0);
+        setReviewText("");
+        setExistingReviewId(null);
+      }
+    } catch (err) {
+      setReviewError(err.response?.data?.message || "Failed to load reviews");
+    } finally {
+      setReviewLoading(false);
+    }
+  }, [id, user]);
+
+  const handleSubmitReview = async () => {
+    if (!user) {
+      toast.error("Please sign in to submit a review.");
+      return;
+    }
+
+    if (!reviewRating) {
+      toast.error("Please select a star rating.");
+      return;
+    }
+
+    setSubmittingReview(true);
+
+    try {
+      await reviewAPI.addOrUpdate(id, reviewRating, reviewText.trim());
+      toast.success("Your review has been saved.");
+      await fetchReviews();
+      refetch();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to save review");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
 
   if (loading) {
     return (
@@ -225,6 +294,133 @@ const MovieDetail = () => {
           <p className="text-lg text-dark-300 leading-relaxed">
             {movie.description}
           </p>
+        </div>
+
+        {/* Review Summary and Write Review */}
+        <div className="grid gap-8 mb-12 xl:grid-cols-[1.3fr_1fr]">
+          <div className="space-y-6">
+            <div className="bg-dark-900 rounded-3xl border border-dark-800 p-8">
+              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                <div>
+                  <p className="text-sm uppercase tracking-[0.25em] text-dark-400 mb-2">
+                    Rating Summary
+                  </p>
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <p className="text-5xl font-bold text-white leading-none">
+                        {movie.averageRating > 0
+                          ? movie.averageRating.toFixed(1)
+                          : "0.0"}
+                      </p>
+                      <p className="text-sm text-dark-400">/5</p>
+                    </div>
+                    <div>
+                      <StarRating
+                        value={Math.round(movie.averageRating)}
+                        readOnly
+                      />
+                      <p className="text-sm text-dark-400 mt-2">
+                        {movie.totalReviews} review
+                        {movie.totalReviews === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-3xl bg-dark-950 border border-dark-800 px-5 py-4 text-right">
+                  <p className="text-dark-400 text-sm">
+                    Average rating based on
+                  </p>
+                  <p className="text-white font-semibold">movie reviews</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-dark-900 rounded-3xl border border-dark-800 p-8">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-white">
+                    Write a review
+                  </h3>
+                  <p className="text-dark-400 text-sm">
+                    Share your thoughts and rating for this movie.
+                  </p>
+                </div>
+                <span className="text-sm text-dark-400">
+                  {existingReviewId ? "Update review" : "New review"}
+                </span>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-dark-400 mb-2">Your rating</p>
+                  <StarRating value={reviewRating} onChange={setReviewRating} />
+                </div>
+
+                <div>
+                  <label className="sr-only" htmlFor="reviewText">
+                    Review text
+                  </label>
+                  <textarea
+                    id="reviewText"
+                    value={reviewText}
+                    onChange={(e) => setReviewText(e.target.value)}
+                    rows={5}
+                    placeholder="Tell others what you enjoyed or what could be better..."
+                    className="w-full rounded-3xl border border-dark-800 bg-dark-950 px-4 py-4 text-sm text-dark-100 placeholder:text-dark-500 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                  />
+                </div>
+
+                <button
+                  onClick={handleSubmitReview}
+                  disabled={submittingReview}
+                  className="btn-primary w-full px-6 py-3 text-sm font-semibold"
+                >
+                  {submittingReview
+                    ? "Saving..."
+                    : existingReviewId
+                      ? "Update Review"
+                      : "Submit Review"}
+                </button>
+              </div>
+
+              {reviewError && (
+                <p className="text-sm text-red-400 mt-3">{reviewError}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-dark-900 rounded-3xl border border-dark-800 p-8">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-xl font-bold text-white">All reviews</h3>
+                <p className="text-dark-400 text-sm">
+                  Read feedback from other viewers.
+                </p>
+              </div>
+              <span className="text-sm text-dark-400">
+                {reviewLoading
+                  ? "Loading..."
+                  : `${reviews.length} review${reviews.length === 1 ? "" : "s"}`}
+              </span>
+            </div>
+
+            {reviewLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <LoadingSpinner />
+              </div>
+            ) : reviews.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-dark-800 bg-dark-950 p-8 text-center text-dark-400">
+                <p>No reviews yet. Be the first to rate this movie.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {reviews.map((review) => (
+                  <ReviewCard key={review._id} review={review} />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Genres & Moods */}

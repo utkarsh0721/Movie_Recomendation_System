@@ -125,23 +125,24 @@ export const useMovieDetail = (id) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchMovie = async () => {
-      if (!id) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await movieAPI.getOne(id);
-        setMovie(response.data.data);
-        setSimilarMovies(response.data.data.similarMovies || []);
-      } catch (err) {
-        setError(err.response?.data?.message || 'Failed to fetch movie');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchMovie();
+  const fetchMovie = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await movieAPI.getOne(id);
+      setMovie(response.data.data);
+      setSimilarMovies(response.data.data.similarMovies || []);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to fetch movie');
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
-  return { movie, similarMovies, loading, error };
+  useEffect(() => {
+    fetchMovie();
+  }, [fetchMovie]);
+
+  return { movie, similarMovies, loading, error, refetch: fetchMovie };
 };

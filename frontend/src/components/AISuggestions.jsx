@@ -48,7 +48,7 @@ const AISuggestions = () => {
         </div>
         <h3 className="text-xl font-bold gradient-text">AI Suggestions for You</h3>
         <span className="px-2 py-1 rounded-full bg-accent-500/20 text-accent-400 text-xs font-medium">
-          Powered by Gemini
+        
         </span>
       </div>
 

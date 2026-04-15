@@ -58,7 +58,7 @@ const Home = () => {
                           border border-primary-500/30 mb-6 animate-fade-in">
               <Sparkles className="w-4 h-4 text-primary-400" />
               <span className="text-sm text-primary-300 font-medium">
-                Powered by Gemini AI
+                AI-Powered Movie Recommendations
               </span>
             </div>
 
